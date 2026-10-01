@@ -29,7 +29,8 @@ The Terraform script provided here, along with any other scripts or demo activit
 This Terraform script automates the underlying AWS infrastructure so you can focus on the demo activities instead of building infrastructure by hand. While it allows some flexibility in configuration and infrastructure objects, some components are hardcoded and cannot be changed. Check the "How to Use" section before using it.
 
 ---
-## How the Deployment Works
+
+## What Gets Deployed & The Architecture Overview
 
 This section walks through what gets built, so you understand the shape of the environment before you deploy it.
 
@@ -45,20 +46,24 @@ This section walks through what gets built, so you understand the shape of the e
 
 **6. The virtual machines are created last.** Four Ubuntu EC2 instances are built (by default): the bastion in the public subnet, and the master and worker nodes in the private subnet (one master, two workers by default). Every node gets a fixed, predetermined private IP, rather than one handed out by DHCP.
 
-**7. The bastion is prepared for the next stage.** Terraform copies a `k8s-scripts/` folder onto the bastion and makes every script executable. Nothing runs yet — these scripts are used in **02-Prepare** to install Kubernetes.
+**7. The bastion is prepared for the next stage.** Terraform copies a `k8s-scripts/` folder onto the bastion and makes every script executable. Nothing runs yet — these scripts are used in [**02-Prepare**](/02-Prepare/README.md) to install and prepare Kubernetes.
 
 One last thing worth knowing: the Kubernetes nodes have no public IP. The bastion is the only way in, and the NAT Gateway is the only way out to the internet for those nodes.
 
-> Everything above describes the default setup — four EC2 instances, for example, are the default node count. You can customize this. Check the Variables section below and make sure you understand what each variable controls before changing anything.
+> *Everything above describes the default setup — four EC2 instances, for example, are the default node count. You can customize this. Check the Variables section below and make sure you understand what each variable controls before changing anything. Refer to the Customization section for a guide on how to customize objects to your preferred design.*
+
+The diagram below shows the full environment as it looks with the default settings: the VPC, both subnets, both security groups, the load balancer, and every node, each with the fixed private IP address it will always be given.
 
 ![Architecture Diagram](Images/AWS-Kube-Arch-HL.png)
+
+---
 
 ### Resources Deployed
 
 The table below lists every resource this Terraform creates, so you can see the full footprint of what will be built in your AWS account before you run it.
 
 | Resource Type | Resource Name | Purpose |
-|---|---|---|
+|:---|:---|:---|
 | `aws_vpc` | `main-vpc` | The VPC everything else sits inside |
 | `aws_internet_gateway` | `main-igw` | Gives the public subnet a route to the internet |
 | `aws_subnet` | `pub-sub-01` | Public subnet — hosts the bastion and the load balancer |
@@ -97,120 +102,25 @@ The table below lists every resource this Terraform creates, so you can see the 
 | `aws_instance` | `kube-master` | Kubernetes master node(s), 1 by default |
 | `aws_instance` | `kube-worker` | Kubernetes worker node(s), 2 by default |
 | `data.aws_ami` | `ami-os` | Looks up the OS image used by the bastion and all Kubernetes nodes |
-
----
-
-## How the Deployment Works
-
-This section walks through what actually gets built, and in what order, so you understand the shape of the environment before you deploy it.
-
-**1. Networking comes first.** A VPC is created to contain everything else. Inside it, two subnets are created: a public one and a private one, both in a single Availability Zone. An Internet Gateway is attached to the VPC so the public subnet can reach the internet directly. A NAT Gateway is also created, sitting in the public subnet — this is what lets the private subnet reach the internet too, but only outbound, without exposing anything in it directly.
-
-**2. Security groups control what traffic is allowed.** Two security groups are created, one per subnet. The public security group allows SSH, HTTP, and HTTPS in from the internet, plus anything coming from inside the VPC, and allows all outbound traffic out. The private security group allows all traffic from inside the VPC, and all traffic coming from the public security group specifically — this second rule is what lets the bastion host SSH into the Kubernetes nodes later on.
-
-**3. Routing tells each subnet how to reach the internet.** A public route table sends the public subnet's outbound traffic straight to the Internet Gateway. A private route table sends the private subnet's outbound traffic through the NAT Gateway instead. Each route table is then associated with its matching subnet.
-
-**4. A load balancer is created for the cluster's ingress traffic.** This is an internet-facing Network Load Balancer, with target groups and listeners on ports 80 and 443. Every master and worker node is registered against both target groups. This is because, in this demo setup, any node could end up running the ingress controller once Kubernetes is installed, so the load balancer needs to be able to reach all of them.
-
-**5. An SSH key pair is generated for you.** Terraform generates a fresh 4096-bit RSA key pair every time you run `apply`, registers the public key in AWS, and saves the private key locally on your machine. It also copies that same private key onto the bastion host itself. This matters because the bastion needs its own copy of the key to SSH onward into the private Kubernetes nodes — you use your local copy to reach the bastion, and the bastion uses its own copy to reach everything behind it.
-
-**6. The virtual machines are created last.** Four EC2 instances are built, all running Ubuntu: the bastion host in the public subnet, and the master and worker nodes in the private subnet (one master and two workers by default). Every node gets a fixed, predetermined private IP address, rather than one handed out automatically by DHCP. This is a deliberate choice — it means the IP layout is always predictable and known in advance, which matters later when you're SSHing between nodes or writing scripts that reference them. All four instances use the same Ubuntu image, resolved through a single AMI lookup based on a set of filters you can adjust.
-
-**7. The bastion is prepared for the next stage.** As the bastion host is created, Terraform also copies a folder called `k8s-scripts/` onto it, and makes every script inside it executable. Nothing in that folder is run yet — these scripts are simply staged and ready, waiting for you to use them in **02-Prepare**, where they handle the actual installation and configuration of Kubernetes on each node.
-
-One last thing worth knowing: the Kubernetes nodes themselves have no public IP address at all. The bastion host is the only way in from outside, and the NAT Gateway is the only way those nodes can reach out to the internet. This is what keeps them private while still letting them function.
 
 ---
 
 ## Variables
 
-Every setting in this deployment has a default value, so the Terraform runs as-is, with no changes needed, if you just want to get a demo environment up quickly. That covers things like the region, the network address ranges, the instance sizes, how many nodes you get, and which OS image is used.
+Most of the infrastructure deployed here has no hardcoded settings. It depends heavily on variables instead, and the main aim of that is to allow customization. You can check `variables.tf` for a closer look, and every variable is also listed in the table below.
 
-If you do want to change something, don't edit `variables.tf` directly. Instead, copy `terraform.tfvars.example` to a new file called `terraform.tfvars`, and set only the values you want to change inside it. Terraform reads this file automatically on both `plan` and `apply` — you don't need to pass any extra flags for it to be picked up.
+Every variable has a default value, so the Terraform runs as-is, with no changes needed — for example, the default is 1 bastion node. This means you can run the script without changing anything, and it will still build the environment based on these default values. Each variable also has its own validation check, to catch mistakes early, before anything is actually built in AWS.
 
-Every variable also has a validation rule attached to it. If you set a value that breaks that rule, `terraform plan` will stop and show you a clear error, before anything is actually built in AWS. This is there to catch mistakes early, rather than letting a bad value cause a confusing failure partway through deployment.
+Take `aws-region` as an example. Its default value is `eu-west-1`, so unless you say otherwise, all the infrastructure is deployed into that region.
+
+To override any default, there's a `terraform.tfvars.example` file that lists every variable you're able to edit. Do not use this file directly — it won't work. Instead, make a copy of it named `terraform.tfvars`, and edit that copy with the values you want to change. So, for example, if you want to change the region, you'd set it in `terraform.tfvars`, and Terraform will use that value instead of the default. Check the Customization section for more details.
 
 A small number of variables are the exception to all of this: `bastion-ip-host-num`, `kube-master-ip-start`, and `kube-worker-ip-start`. These are declared as variables, but they are fixed by design, and their validation rules will reject any value other than the default. This is because the whole fixed-IP addressing scheme for this environment depends on these three staying exactly where they are — changing them would break the predictable IP layout described above.
-
-### Changing the OS or the Region
-
-These two changes are common enough, and involved enough, that they deserve their own walkthrough.
-
-**To change the OS or the AMI:**
-
-1. First, find the exact AMI you want to use, in the AWS region you're deploying into. You can look this up using the AWS CLI:
-   ```bash
-   aws ec2 describe-images \
-     --region <your-region> \
-     --image-ids <ami-id> \
-     --query 'Images[0].{ID:ImageId,Name:Name,Owner:OwnerId,Description:Description,Arch:Architecture,Virt:VirtualizationType,RootDevice:RootDeviceType,State:State,Public:Public}' \
-     --output table
-   ```
-2. This command returns the AMI's name, the account that owns it, its architecture, its virtualization type, and its root device type. You'll need all of these in the next step.
-3. Open `terraform.tfvars` and set `os-ami-owner`, `os-ami-name`, `os-ami-virtualization-type`, `os-ami-architecture`, and `os-ami-root-device-type` to match what the command returned. These five values work together as a single lookup, so change them together as a set, not one at a time.
-4. Run `terraform plan` before you apply anything. This lets you confirm the new AMI resolves correctly, without touching any real infrastructure yet.
-
-**To change the region:**
-
-1. Set `aws-region` in `terraform.tfvars` to the AWS region you want to deploy into.
-2. Check that the Ubuntu release you're using is actually published in that region. AWS releases don't always land in every region at the same time, so this step matters. If it isn't available, you'll need to repeat the AMI lookup above for the new region and update the AMI variables to match.
-3. As always, run `terraform plan` before `apply`, to confirm everything resolves the way you expect.
-
----
-
-## Resources Deployed
-
-The table below lists every resource this Terraform creates, so you can see the full footprint of what will be built in your AWS account before you run it.
-
-| Resource Type | Resource Name | Purpose |
-|---|---|---|
-| `aws_vpc` | `main-vpc` | The VPC everything else sits inside |
-| `aws_internet_gateway` | `main-igw` | Gives the public subnet a route to the internet |
-| `aws_subnet` | `pub-sub-01` | Public subnet — hosts the bastion and the load balancer |
-| `aws_subnet` | `priv-sub-01` | Private subnet — hosts the Kubernetes nodes |
-| `aws_eip` | `nat-gw-eip` | Elastic IP for the NAT Gateway |
-| `aws_eip` | `lb-eip` | Elastic IP for the Network Load Balancer |
-| `aws_nat_gateway` | `main-natgw` | Gives the private subnet outbound internet access |
-| `aws_security_group` | `pub-sg-01` | Firewall rules for the public subnet |
-| `aws_security_group` | `priv-sg-01` | Firewall rules for the private subnet |
-| `aws_security_group_rule` | `pub-sg-ingress-ssh-rules-01` | Allows SSH (22) into the bastion from the internet |
-| `aws_security_group_rule` | `pub-sg-ingress-http-rules-01` | Allows HTTP (80) into the load balancer from the internet |
-| `aws_security_group_rule` | `pub-sg-ingress-htts-rules-01` | Allows HTTPS (443) into the load balancer from the internet |
-| `aws_security_group_rule` | `pub-sg-ingress-internal-rules-01` | Allows all traffic into the public subnet from inside the VPC |
-| `aws_security_group_rule` | `pub-sg-egress-rules-01` | Allows all outbound traffic from the public subnet |
-| `aws_security_group_rule` | `priv-sg-ingress-rules-01` | Allows all traffic into the private subnet from inside the VPC |
-| `aws_security_group_rule` | `priv-sg-ingress-rules-02` | Allows all traffic into the private subnet from the public security group |
-| `aws_security_group_rule` | `priv-sg-egress-rules-01` | Allows all outbound traffic from the private subnet |
-| `aws_route_table` | `pub-rt-01` | Routes public subnet traffic to the Internet Gateway |
-| `aws_route_table` | `priv-rt-01` | Routes private subnet traffic to the NAT Gateway |
-| `aws_route_table_association` | `pub-rt-association-01` | Links the public route table to the public subnet |
-| `aws_route_table_association` | `priv-rt-association-01` | Links the private route table to the private subnet |
-| `aws_lb` | `nlb-01` | Internet-facing Network Load Balancer |
-| `aws_lb_target_group` | `http-tg-01` | Target group for HTTP (80) traffic |
-| `aws_lb_target_group` | `https-tg-01` | Target group for HTTPS (443) traffic |
-| `aws_lb_target_group_attachment` | `http-tg-att-master` | Registers every master node against the HTTP target group |
-| `aws_lb_target_group_attachment` | `http-tg-att-worker` | Registers every worker node against the HTTP target group |
-| `aws_lb_target_group_attachment` | `https-tg-att-master` | Registers every master node against the HTTPS target group |
-| `aws_lb_target_group_attachment` | `https-tg-att-worker` | Registers every worker node against the HTTPS target group |
-| `aws_lb_listener` | `http-listener-01` | Load balancer listener on port 80 |
-| `aws_lb_listener` | `https-listener-01` | Load balancer listener on port 443 |
-| `random_string` | `ssh-key-random` | Random suffix so the SSH key name is unique per deployment |
-| `tls_private_key` | `ssh-key-pair-local-01` | Generates the 4096-bit RSA SSH key pair |
-| `aws_key_pair` | `demo-ssh-key-pair-01` | Registers the generated public key in AWS |
-| `local_file` | `demo-ssh-key-pair` | Writes the generated private key to a local file |
-| `aws_instance` | `bastion-01` | The bastion host — the only public entry point |
-| `aws_instance` | `kube-master` | Kubernetes master node(s), 1 by default |
-| `aws_instance` | `kube-worker` | Kubernetes worker node(s), 2 by default |
-| `data.aws_ami` | `ami-os` | Looks up the OS image used by the bastion and all Kubernetes nodes |
-
----
-
-## Variables Reference
 
 The table below lists every variable this Terraform accepts, along with its default value. Anything not listed in your `terraform.tfvars` file will fall back to the default shown here.
 
 | Variable | Default | Purpose |
-|---|---|---|
+|:---|:---|:---|
 | `aws-region` | `eu-west-1` | AWS region to deploy into |
 | `vpc-cidr` | `10.10.0.0/16` | CIDR block for the VPC |
 | `pub-sub-01-cidr` | `10.10.10.0/24` | CIDR block for the public subnet |
@@ -234,11 +144,89 @@ The table below lists every variable this Terraform accepts, along with its defa
 
 ---
 
-## Architecture Overview
+## Customization
 
-The diagram below shows the full environment as it looks with the default settings: the VPC, both subnets, both security groups, the load balancer, and every node, each with the fixed private IP address it will always be given.
+Before anything else, it's worth knowing what you **cannot** change: the starting IP addresses for the nodes — `bastion-ip-host-num`, `kube-master-ip-start`, and `kube-worker-ip-start`. These are fixed by design, and Terraform will reject any attempt to change them. The reason is that other scripts in this repo depend on a controlled, predictable IP layout to work correctly — if these shifted, those scripts would break. You can still customize the subnet CIDR itself, but whatever subnet you set, node numbering will always start from `.11` and count forward from there.
 
-[Insert architecture diagram here]
+Everything else is open to customization. Here's how to do it.
+
+Before you start, make sure this repo is already cloned onto your laptop or execution environment:
+
+```bash
+git clone https://github.com/tahershaker/Kubernetes-Hands-On-Demo-On-AWS.git
+cd Kubernetes-Hands-On-Demo-On-AWS/01-Provision/Terraform
+```
+
+**Step 1 — Create your own variables file**
+
+Never edit `variables.tf` directly, and never edit `terraform.tfvars.example` directly either — it's a template, and Terraform won't read it. Instead, make a copy of it:
+```bash
+cp terraform.tfvars.example terraform.tfvars
+```
+
+**Step 2 — Open `terraform.tfvars` and set the values you want to change**
+
+Only add the variables you actually want to override. Anything you leave out will just use its default value. For example, to change the number of worker nodes from the default of 2 to 4:
+```hcl
+kube-worker-count = 4
+```
+
+**Step 3 — Review your plan before applying**
+
+Always run `plan` before `apply`, so you can see what Terraform is about to do, based on your changes:
+```bash
+terraform plan -out=tfplan
+```
+If any value you set breaks a validation rule, this is where you'll find out — Terraform will stop and show you a clear error, before anything is built.
+
+### Changing the Region
+
+Changing the region can affect your OS variables too. A given Ubuntu release isn't always published in every region at the same time, so the AMI you're using by default may not exist in the region you're moving to. Always check this before you apply.
+
+1. Open `terraform.tfvars` and set:
+```hcl
+   aws-region = "me-central-1"
+```
+
+2. Check that Ubuntu — the default OS used in this script — is actually published in that region - replace the <new-region> with the region you are changing to:
+```bash
+   aws ec2 describe-images \
+     --region <new-region> \
+     --owners 099720109477 \
+     --filters "Name=name,Values=ubuntu/images/hvm-ssd-gp3/ubuntu-resolute-26.04-amd64-server-*" \
+     --query 'Images[].{ID:ImageId,Name:Name}' \
+     --output table
+```
+   If this returns one or more rows, the AMI exists in that region and you're fine. If it comes back empty, it isn't published there, and you'll need to update the AMI variables — see "Changing the OS or the AMI" below.
+
+3. Run `terraform plan` to confirm everything resolves correctly before you `apply`.
+
+### Changing the OS or the AMI
+
+This script defaults to Ubuntu, but you can point it at a different OS or AMI entirely, as long as the five AMI variables below are set consistently.
+
+1. Find the exact AMI you want to use, in the region you're deploying into:
+```bash
+   aws ec2 describe-images \
+     --region <your-region> \
+     --image-ids <ami-id> \
+     --query 'Images[0].{ID:ImageId,Name:Name,Owner:OwnerId,Description:Description,Arch:Architecture,Virt:VirtualizationType,RootDevice:RootDeviceType,State:State,Public:Public}' \
+     --output table
+```
+
+2. This returns the AMI's name, owning account, architecture, virtualization type, and root device type. You'll need all of these.
+
+3. In `terraform.tfvars`, set the five AMI variables to match what the command returned:
+```hcl
+   os-ami-owner               = "099720109477"
+   os-ami-name                = "ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"
+   os-ami-virtualization-type = "hvm"
+   os-ami-architecture        = "x86_64"
+   os-ami-root-device-type    = "ebs"
+```
+   These five work together as a single lookup, so change them as a set, not one at a time.
+
+4. Run `terraform plan` to confirm the new AMI resolves correctly before you `apply`.
 
 ---
 
@@ -338,4 +326,8 @@ terraform output
 
 **Step 8 — Continue to 02-Prepare**
 
-At this point, your infrastructure is up and ready, but Kubernetes itself is not installed yet. Move on to **02-Prepare**, where you'll use the scripts already staged on the bastion to install and configure Kubernetes on each node.
+At this point, your infrastructure is up and ready, but Kubernetes itself is not installed yet. Move on to [**02-Prepare**](/02-Prepare/README.md), where you'll use the scripts already staged on the bastion to install and configure Kubernetes on each node.
+
+---
+
+Enjoy 😂
