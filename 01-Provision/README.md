@@ -205,7 +205,7 @@ Changing the region can affect your OS variables too. A given Ubuntu release isn
 
 This script defaults to Ubuntu, but you can point it at a different OS or AMI entirely, as long as the five AMI variables below are set consistently.
 
-1. Find the exact AMI you want to use, in the region you're deploying into:
+1. Find the exact AMI you want to use, in the region you're deploying into. You can find an AMI ID through the AWS Console: go to **EC2 → Images → AMIs**, switch "Owned by me" to **Public images**, and search by name (for example, `ubuntu-noble-24.04`). Copy the AMI ID of the one you want, then confirm its full details with the AWS CLI:
 ```bash
    aws ec2 describe-images \
      --region <your-region> \
@@ -213,6 +213,8 @@ This script defaults to Ubuntu, but you can point it at a different OS or AMI en
      --query 'Images[0].{ID:ImageId,Name:Name,Owner:OwnerId,Description:Description,Arch:Architecture,Virt:VirtualizationType,RootDevice:RootDeviceType,State:State,Public:Public}' \
      --output table
 ```
+
+![ami-check](/01-Provision/Images/ami-check.png)
 
 2. This returns the AMI's name, owning account, architecture, virtualization type, and root device type. You'll need all of these.
 
