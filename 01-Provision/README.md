@@ -309,6 +309,8 @@ terraform validate
 ```
 This checks the configuration for errors before you go any further. It doesn't touch AWS at all.
 
+![step-4](/01-Provision/Images/step-4.png)
+
 **Step 5 — Review the plan**
 ```bash
 terraform plan -out=tfplan
@@ -317,9 +319,11 @@ This shows you exactly what Terraform is about to create, without creating anyth
 
 **Step 6 — Apply**
 ```bash
-terraform apply tfplan
+terraform apply
 ```
 This is the step that actually creates everything in your AWS account, using the plan you just reviewed.
+
+![step-6](/01-Provision/Images/step-6.png)
 
 **Step 7 — Note the outputs**
 
@@ -328,9 +332,21 @@ Once `apply` finishes, Terraform prints the bastion's public IP, the load balanc
 terraform output
 ```
 
+![step-7](/01-Provision/Images/step-7.png)
+
 **Step 8 — Continue to 02-Prepare**
 
 At this point, your infrastructure is up and ready, but Kubernetes itself is not installed yet. Move on to [**02-Prepare**](/02-Prepare/README.md), where you'll use the scripts already staged on the bastion to install and configure Kubernetes on each node.
+
+---
+
+## Cleanup
+
+The NAT Gateway and the Network Load Balancer both bill hourly, whether you're using them or not, plus data processing charges on top. Once you're done with the environment, tear it down:
+
+```bash
+terraform destroy
+```
 
 ---
 
