@@ -350,6 +350,8 @@ The NAT Gateway and the Network Load Balancer both bill hourly, whether you're u
 terraform destroy
 ```
 
+![cleanup](/01-Provision/Images/cleanup.png)
+
 ---
 
 Enjoy 😂
