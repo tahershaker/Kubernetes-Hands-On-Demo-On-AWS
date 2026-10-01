@@ -109,14 +109,14 @@ variable "aws-region" {
 # check (on priv-sub-01-cidr) exists so the two subnets can never collide.
 
 locals {
-  cidr-bounds = {
-    for key, cidr in {
-      vpc = var.vpc-cidr
-      pub = var.pub-sub-01-cidr
-    } : key => {
-      first = sum([for i, octet in split(".", cidrhost(cidr, 0)) : tonumber(octet) * pow(256, 3 - i)])
-      last  = sum([for i, octet in split(".", cidrhost(cidr, pow(2, 32 - tonumber(split("/", cidr)[1])) - 1)) : tonumber(octet) * pow(256, 3 - i)])
-    }
+  vpc-cidr-bounds = {
+    first = sum([for i, octet in split(".", cidrhost(var.vpc-cidr, 0)) : tonumber(octet) * pow(256, 3 - i)])
+    last  = sum([for i, octet in split(".", cidrhost(var.vpc-cidr, pow(2, 32 - tonumber(split("/", var.vpc-cidr)[1])) - 1)) : tonumber(octet) * pow(256, 3 - i)])
+  }
+
+  pub-sub-01-cidr-bounds = {
+    first = sum([for i, octet in split(".", cidrhost(var.pub-sub-01-cidr, 0)) : tonumber(octet) * pow(256, 3 - i)])
+    last  = sum([for i, octet in split(".", cidrhost(var.pub-sub-01-cidr, pow(2, 32 - tonumber(split("/", var.pub-sub-01-cidr)[1])) - 1)) : tonumber(octet) * pow(256, 3 - i)])
   }
 }
 
