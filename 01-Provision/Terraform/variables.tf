@@ -36,7 +36,7 @@
 # Both subnets must stay /24:
 #   - Public subnet (pub-sub-01-cidr): the bastion always takes .11.
 #   - Private subnet (priv-sub-01-cidr): master nodes always take .11-.19
-#     (9 addresses - enough for the 1/3/5 master counts this design
+#     (9 addresses - enough for the 1/3 master counts this design
 #     allows), worker nodes always take .21-.39 (19 addresses). This is
 #     why kube-worker-count is capped at 19 - that is the entire usable
 #     range.
@@ -107,18 +107,12 @@ variable "aws-region" {
 # checks exist so a mismatched vpc-cidr and subnet CIDR fails at
 # `terraform plan`, not as an opaque AWS API error mid-apply. The overlap
 # check (on priv-sub-01-cidr) exists so the two subnets can never collide.
-#
-# Terraform has no built-in "is this CIDR inside that CIDR" function, so
-# cidr-bounds below converts each CIDR's first and last address into a
-# plain number, making "inside" and "overlap" simple numeric comparisons
-# in the validation blocks further down.
 
 locals {
   cidr-bounds = {
     for key, cidr in {
-      vpc  = var.vpc-cidr
-      pub  = var.pub-sub-01-cidr
-      priv = var.priv-sub-01-cidr
+      vpc = var.vpc-cidr
+      pub = var.pub-sub-01-cidr
     } : key => {
       first = sum([for i, octet in split(".", cidrhost(cidr, 0)) : tonumber(octet) * pow(256, 3 - i)])
       last  = sum([for i, octet in split(".", cidrhost(cidr, pow(2, 32 - tonumber(split("/", cidr)[1])) - 1)) : tonumber(octet) * pow(256, 3 - i)])
@@ -134,6 +128,11 @@ variable "vpc-cidr" {
   validation {
     condition     = can(cidrhost(var.vpc-cidr, 0))
     error_message = "vpc-cidr must be a valid CIDR block, e.g. 10.10.0.0/16."
+  }
+
+  validation {
+    condition     = tonumber(split("/", var.vpc-cidr)[1]) == 16
+    error_message = "vpc-cidr must be a /16."
   }
 }
 
@@ -154,8 +153,8 @@ variable "pub-sub-01-cidr" {
 
   validation {
     condition = (
-      local.cidr-bounds.pub.first >= local.cidr-bounds.vpc.first &&
-      local.cidr-bounds.pub.last <= local.cidr-bounds.vpc.last
+      sum([for i, octet in split(".", cidrhost(var.pub-sub-01-cidr, 0)) : tonumber(octet) * pow(256, 3 - i)]) >= local.cidr-bounds.vpc.first &&
+      sum([for i, octet in split(".", cidrhost(var.pub-sub-01-cidr, pow(2, 32 - tonumber(split("/", var.pub-sub-01-cidr)[1])) - 1)) : tonumber(octet) * pow(256, 3 - i)]) <= local.cidr-bounds.vpc.last
     )
     error_message = "pub-sub-01-cidr must fall entirely inside vpc-cidr."
   }
@@ -178,16 +177,16 @@ variable "priv-sub-01-cidr" {
 
   validation {
     condition = (
-      local.cidr-bounds.priv.first >= local.cidr-bounds.vpc.first &&
-      local.cidr-bounds.priv.last <= local.cidr-bounds.vpc.last
+      sum([for i, octet in split(".", cidrhost(var.priv-sub-01-cidr, 0)) : tonumber(octet) * pow(256, 3 - i)]) >= local.cidr-bounds.vpc.first &&
+      sum([for i, octet in split(".", cidrhost(var.priv-sub-01-cidr, pow(2, 32 - tonumber(split("/", var.priv-sub-01-cidr)[1])) - 1)) : tonumber(octet) * pow(256, 3 - i)]) <= local.cidr-bounds.vpc.last
     )
     error_message = "priv-sub-01-cidr must fall entirely inside vpc-cidr."
   }
 
   validation {
     condition = !(
-      local.cidr-bounds.priv.first <= local.cidr-bounds.pub.last &&
-      local.cidr-bounds.pub.first <= local.cidr-bounds.priv.last
+      sum([for i, octet in split(".", cidrhost(var.priv-sub-01-cidr, 0)) : tonumber(octet) * pow(256, 3 - i)]) <= local.cidr-bounds.pub.last &&
+      local.cidr-bounds.pub.first <= sum([for i, octet in split(".", cidrhost(var.priv-sub-01-cidr, pow(2, 32 - tonumber(split("/", var.priv-sub-01-cidr)[1])) - 1)) : tonumber(octet) * pow(256, 3 - i)])
     )
     error_message = "priv-sub-01-cidr must not overlap pub-sub-01-cidr."
   }
@@ -276,16 +275,15 @@ variable "bastion-node-size" {
 #
 # NOTE: kube-master-count defaults to 1
 # NOTE: kube-worker-count defaults to 2
-# NOTE: k8s-distro defaults to kubeadm
 
 variable "kube-master-count" {
-  description = "Number of Kubernetes master (control-plane) nodes. Must be 1, 3, or 5 for a healthy etcd quorum. The fixed master IP range (.11-.19) has room for up to 9, but quorum rules cap it at 5."
+  description = "Number of Kubernetes master (control-plane) nodes. Must be 1 or 3 for a healthy etcd quorum. The fixed master IP range (.11-.19) has room for up to 9, but quorum rules cap it at 3."
   type        = number
   default     = 1
 
   validation {
-    condition     = contains([1, 3, 5], var.kube-master-count)
-    error_message = "kube-master-count must be 1, 3, or 5 (odd, for etcd quorum)."
+    condition     = contains([1, 3], var.kube-master-count)
+    error_message = "kube-master-count must be 1 or 3 (odd, for etcd quorum)."
   }
 }
 
@@ -297,17 +295,6 @@ variable "kube-worker-count" {
   validation {
     condition     = var.kube-worker-count >= 1 && var.kube-worker-count <= 19
     error_message = "kube-worker-count must be between 1 and 19 - the fixed worker IP range (.21-.39) provides only 19 usable addresses."
-  }
-}
-
-variable "k8s-distro" {
-  description = "Kubernetes distribution to install on every node: kubeadm or rke2"
-  type        = string
-  default     = "kubeadm"
-
-  validation {
-    condition     = contains(["kubeadm", "rke2"], var.k8s-distro)
-    error_message = "k8s-distro must be either \"kubeadm\" or \"rke2\"."
   }
 }
 
