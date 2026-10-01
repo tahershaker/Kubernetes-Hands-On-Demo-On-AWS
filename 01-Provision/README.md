@@ -285,6 +285,8 @@ git clone https://github.com/tahershaker/Kubernetes-Hands-On-Demo-On-AWS.git
 cd Kubernetes-Hands-On-Demo-On-AWS/01-Provision/Terraform
 ```
 
+![step-1](/01-Provision/Images/step-1.png)
+
 **Step 2 — (Optional) Override any default settings**
 
 If the defaults work for you, skip this step entirely. Otherwise:
@@ -298,6 +300,8 @@ cp terraform.tfvars.example terraform.tfvars
 terraform init
 ```
 This downloads the providers this configuration needs, and sets up Terraform's working files in this folder.
+
+![step-3](/01-Provision/Images/step-3.png)
 
 **Step 4 — Validate the configuration**
 ```bash
