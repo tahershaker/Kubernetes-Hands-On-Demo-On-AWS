@@ -242,10 +242,10 @@ Here is everything you'll find inside this folder, and what each part is for:
 │   └── aws-arch.png              # Architecture diagram
 ├── Terraform/
 │   ├── k8s-scripts/              # Scripts copied onto the bastion during provisioning.
-│   │                              # Not used here — they're picked up in 02-Prepare to
-│   │                              # install and configure Kubernetes. Several scripts
-│   │                              # are included, covering different environments and
-│   │                              # requirements.
+│   │                             # Not used here — they're picked up in 02-Prepare to
+│   │                             # install and configure Kubernetes. Several scripts
+│   │                             # are included, covering different environments and
+│   │                             # requirements.
 │   ├── 01-providers.tf           # Required providers and AWS provider config
 │   ├── 02-vpc.tf                 # The VPC
 │   ├── 03-internet-gw.tf         # Internet Gateway
