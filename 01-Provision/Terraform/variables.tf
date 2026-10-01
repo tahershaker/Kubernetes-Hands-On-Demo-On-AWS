@@ -153,8 +153,8 @@ variable "pub-sub-01-cidr" {
 
   validation {
     condition = (
-      sum([for i, octet in split(".", cidrhost(var.pub-sub-01-cidr, 0)) : tonumber(octet) * pow(256, 3 - i)]) >= local.cidr-bounds.vpc.first &&
-      sum([for i, octet in split(".", cidrhost(var.pub-sub-01-cidr, pow(2, 32 - tonumber(split("/", var.pub-sub-01-cidr)[1])) - 1)) : tonumber(octet) * pow(256, 3 - i)]) <= local.cidr-bounds.vpc.last
+      sum([for i, octet in split(".", cidrhost(var.pub-sub-01-cidr, 0)) : tonumber(octet) * pow(256, 3 - i)]) >= local.vpc-cidr-bounds.first &&
+      sum([for i, octet in split(".", cidrhost(var.pub-sub-01-cidr, pow(2, 32 - tonumber(split("/", var.pub-sub-01-cidr)[1])) - 1)) : tonumber(octet) * pow(256, 3 - i)]) <= local.vpc-cidr-bounds.last
     )
     error_message = "pub-sub-01-cidr must fall entirely inside vpc-cidr."
   }
@@ -177,16 +177,16 @@ variable "priv-sub-01-cidr" {
 
   validation {
     condition = (
-      sum([for i, octet in split(".", cidrhost(var.priv-sub-01-cidr, 0)) : tonumber(octet) * pow(256, 3 - i)]) >= local.cidr-bounds.vpc.first &&
-      sum([for i, octet in split(".", cidrhost(var.priv-sub-01-cidr, pow(2, 32 - tonumber(split("/", var.priv-sub-01-cidr)[1])) - 1)) : tonumber(octet) * pow(256, 3 - i)]) <= local.cidr-bounds.vpc.last
+      sum([for i, octet in split(".", cidrhost(var.priv-sub-01-cidr, 0)) : tonumber(octet) * pow(256, 3 - i)]) >= local.vpc-cidr-bounds.first &&
+      sum([for i, octet in split(".", cidrhost(var.priv-sub-01-cidr, pow(2, 32 - tonumber(split("/", var.priv-sub-01-cidr)[1])) - 1)) : tonumber(octet) * pow(256, 3 - i)]) <= local.vpc-cidr-bounds.last
     )
     error_message = "priv-sub-01-cidr must fall entirely inside vpc-cidr."
   }
 
   validation {
     condition = !(
-      sum([for i, octet in split(".", cidrhost(var.priv-sub-01-cidr, 0)) : tonumber(octet) * pow(256, 3 - i)]) <= local.cidr-bounds.pub.last &&
-      local.cidr-bounds.pub.first <= sum([for i, octet in split(".", cidrhost(var.priv-sub-01-cidr, pow(2, 32 - tonumber(split("/", var.priv-sub-01-cidr)[1])) - 1)) : tonumber(octet) * pow(256, 3 - i)])
+      sum([for i, octet in split(".", cidrhost(var.priv-sub-01-cidr, 0)) : tonumber(octet) * pow(256, 3 - i)]) <= local.pub-sub-01-cidr-bounds.last &&
+      local.pub-sub-01-cidr-bounds.first <= sum([for i, octet in split(".", cidrhost(var.priv-sub-01-cidr, pow(2, 32 - tonumber(split("/", var.priv-sub-01-cidr)[1])) - 1)) : tonumber(octet) * pow(256, 3 - i)])
     )
     error_message = "priv-sub-01-cidr must not overlap pub-sub-01-cidr."
   }
