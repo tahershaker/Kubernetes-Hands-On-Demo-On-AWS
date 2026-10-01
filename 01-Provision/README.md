@@ -354,7 +354,7 @@ Once connected, you can also confirm the `k8s-scripts/` folder was copied across
 ```bash
 ls -la k8s-scripts/
 ```
-You should see the scripts you'll be using in the next stage, **02-Prepare**.
+You should see the scripts you'll be using in the next stage, [**02-Prepare**](/02-Prepare/README.md).
 
 ---
 
