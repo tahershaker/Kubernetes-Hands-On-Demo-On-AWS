@@ -336,7 +336,29 @@ terraform output
 
 ![step-7](/01-Provision/Images/step-7.png)
 
-**Step 8 — Continue to 02-Prepare**
+---
+
+## Testing SSH Access to the Bastion
+
+Before moving on, it's worth confirming you can actually reach the bastion host. Using the `bastion-public-ip` and SSH key path from your `terraform output`, connect to it:
+```bash
+ssh -i <path-to-your-ssh-key> ubuntu@<bastion-public-ip>
+```
+
+If the connection succeeds, you're in. If you get a permissions error on the key file, set the correct permissions first and try again:
+```bash
+chmod 400 <path-to-your-ssh-key>
+```
+
+Once connected, you can also confirm the `k8s-scripts/` folder was copied across correctly:
+```bash
+ls -la k8s-scripts/
+```
+You should see the scripts you'll be using in the next stage, **02-Prepare**.
+
+---
+
+## What's Next
 
 At this point, your infrastructure is up and ready, but Kubernetes itself is not installed yet. Move on to [**02-Prepare**](/02-Prepare/README.md), where you'll use the scripts already staged on the bastion to install and configure Kubernetes on each node.
 
