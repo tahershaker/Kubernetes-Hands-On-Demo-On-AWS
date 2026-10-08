@@ -28,3 +28,7 @@ terraform.rc
 
 # Generated SSH private key from this project - never commit this
 *.pem
+
+# Instance IDs and region written by Terraform for the start/stop scripts.
+# Generated on every apply and specific to each deployment, so not committed.
+instance-ids.env
