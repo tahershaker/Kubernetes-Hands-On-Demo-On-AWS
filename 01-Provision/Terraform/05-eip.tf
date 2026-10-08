@@ -40,4 +40,21 @@ resource "aws_eip" "lb-eip" {
   }
 }
 
+# NOTE: attached to the bastion host (10-compute.tf), the single SSH entry
+# point into the environment. A fixed address means the bastion keeps the
+# same public IP after its EC2 instance is stopped and started again.
+
+# Create Bastion EIP
+resource "aws_eip" "bastion-eip" {
+  depends_on = [aws_internet_gateway.main-igw]
+  instance   = aws_instance.bastion-01.id
+
+  tags = {
+    Name       = "demo-eip-bastion-01"
+    DeployedBy = "TerraForm"
+    UsedFor    = "K8sDemo"
+    User       = "tshaker"
+  }
+}
+
 #========================================
