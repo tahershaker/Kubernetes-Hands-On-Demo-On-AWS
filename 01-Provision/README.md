@@ -364,6 +364,37 @@ At this point, your infrastructure is up and ready, but Kubernetes itself is not
 
 ---
 
+## Stop / Start the Environment
+
+Provisioning this environment is rarely a one-sitting job — you'll often start it, work for a while, then come back to it the next day. Leaving the EC2 instances running in between costs unnecessary money. To help with this, two scripts are provided to stop and start all the instances together. These scripts are available in the `start-stop-scripts/` folder, in this same folder.
+ 
+When you provision the environment, Terraform also writes an `instance-ids.env` file into `start-stop-scripts/` folder, holding the instance IDs for the bastion, every master, and every worker. Both scripts read this file to know which instances to act on.
+
+- **`ec2-power-off.sh`** — stops all EC2 instances. Run this when you're done working for the day.
+- **`ec2-power-on.sh`** — starts them all again. Run this when you come back to continue.
+
+Before using them for the first time, make sure both are executable:
+```bash
+chmod +x start-stop-scripts/ec2-power-off.sh
+chmod +x start-stop-scripts/ec2-power-on.sh
+```
+
+Run both from the Terraform folder, using the same AWS credentials you used to deploy.
+
+To stop all instances:
+```bash
+./start-stop-scripts/ec2-power-off.sh
+```
+
+To start all instances again:
+```bash
+./start-stop-scripts/ec2-power-on.sh
+```
+
+One thing to be clear on: stopping the instances is not the same as destroying the environment. The NAT Gateway, the load balancer, and the attached disks are still billed whilst the instances are stopped. These scripts reduce cost — they don't eliminate it. If you're finished with the environment for good, use `terraform destroy` instead (see Cleanup below).
+
+---
+
 ## Cleanup
 
 The NAT Gateway and the Network Load Balancer both bill hourly, whether you're using them or not, plus data processing charges on top. Once you're done with the environment, tear it down:

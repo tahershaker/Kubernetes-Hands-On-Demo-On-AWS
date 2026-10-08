@@ -14,9 +14,9 @@
 # kube-master-count and kube-worker-count were set to at apply time.
 #
 # NOTE: instance IDs are listed for every EC2 instance. The same IDs are
-# saved to instance-ids.env (written by 10-compute.tf) for the
-# ec2-power-off.sh and ec2-power-on.sh scripts, which stop and start the
-# whole environment to save cost.
+# saved to start-stop-scripts/instance-ids.env (written by 10-compute.tf)
+# for the ec2-power-off.sh and ec2-power-on.sh scripts in that folder,
+# which stop and start the whole environment to save cost.
 #
 #------------------------------------------------------
 
@@ -128,10 +128,11 @@ ${local.worker-lines}
   ----------------------------------------------------------
 
   Stop / start the whole environment to save cost:
-    ./ec2-power-off.sh   (stops all EC2 instances)
-    ./ec2-power-on.sh    (starts them again)
-  Both read instance-ids.env, which this deployment writes for you.
-  Run them from the Terraform folder, using the same AWS credentials.
+    ./start-stop-scripts/ec2-power-off.sh   (stops all EC2 instances)
+    ./start-stop-scripts/ec2-power-on.sh    (starts them again)
+  Both read instance-ids.env from the same folder, which this deployment
+  writes for you. Run them from the Terraform folder, using the same AWS
+  credentials.
   Note: the NAT gateway, load balancer and disks are still billed
   whilst the instances are stopped.
 

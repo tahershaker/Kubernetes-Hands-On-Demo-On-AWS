@@ -194,7 +194,7 @@ resource "aws_instance" "kube-worker" {
 
 # Write instance IDs and region for the power on/off scripts
 resource "local_file" "instance-ids" {
-  filename        = "${path.module}/instance-ids.env"
+  filename        = "${path.module}/start-stop-scripts/instance-ids.env"
   file_permission = "0644"
   content         = <<-EOT
     AWS_REGION="${var.aws-region}"
