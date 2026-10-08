@@ -24,6 +24,7 @@
 locals {
   master-lines = join("\n", [for inst in aws_instance.kube-master : "  - ${inst.tags["Name"]}: IP=${inst.private_ip}  ID=${inst.id}"])
   worker-lines = join("\n", [for inst in aws_instance.kube-worker : "  - ${inst.tags["Name"]}: IP=${inst.private_ip}  ID=${inst.id}"])
+  kube-api-lb-ip = local.create-api-nlb ? cidrhost(var.priv-sub-01-cidr, 10) : "n/a (single master cluster)"
 }
 
 output "bastion-fqdn" {
@@ -48,6 +49,12 @@ output "lb-fqdn" {
 
 output "lb-public-ip" {
   value = aws_eip.lb-eip.public_ip
+}
+
+# Internal address of the Kubernetes API load balancer. Enter this when the
+# first master script asks for the Load Balancer IP. Only exists with 3 masters.
+output "kube-api-lb-ip" {
+  value = local.kube-api-lb-ip
 }
 
 output "k8s-scripts-path-on-bastion" {
@@ -110,6 +117,7 @@ output "Deployment-Outputs" {
   - Bastion Host Instance ID:                   ${aws_instance.bastion-01.id}
   - Load Balancer FQDN:                         ${aws_lb.nlb-01.dns_name}
   - Load Balancer Public IP:                    ${aws_eip.lb-eip.public_ip}
+    - Kube API Load Balancer IP (3 masters):    ${local.kube-api-lb-ip}
   - SSH Key Name:                               ${aws_key_pair.demo-ssh-key-pair-01.key_name}
   - SSH Key Local Path:                         ${random_string.ssh-key-random.result}-${var.ssh-file-name}
   - SSH Key Path on Bastion:                    /home/${var.ec2-user-name}/${var.ssh-file-name}

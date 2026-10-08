@@ -3,8 +3,9 @@
 ###           rquired for this lab              ###  
 ###################################################
 #
-# NOTE: two EIPs total for the whole lab - one for the NAT Gateway's
-# outbound traffic, one for the Load Balancer's inbound traffic.
+# NOTE: three EIPs total for the whole lab - one for the NAT Gateway's
+# outbound traffic, one for the Load Balancer's inbound traffic, and one
+# for the bastion node
 #
 #--------------------------------------------------
 

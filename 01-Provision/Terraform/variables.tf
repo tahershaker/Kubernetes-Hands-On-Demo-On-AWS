@@ -40,6 +40,9 @@
 #     allows), worker nodes always take .21-.39 (19 addresses). This is
 #     why kube-worker-count is capped at 19 - that is the entire usable
 #     range.
+#     Address .10 in the private subnet is reserved for the internal
+#     Kubernetes API load balancer. It is only created when
+#     kube-master-count is 3.
 #
 # bastion-ip-host-num, kube-master-ip-start, and kube-worker-ip-start are
 # declared as variables but are fixed by design, not user-configurable.
@@ -269,8 +272,7 @@ variable "bastion-node-size" {
 #========================================
 
 # Fifth Kubernetes cluster shape variables
-# These control how many master and worker nodes get provisioned, and
-# which Kubernetes distribution cloud-init installs on them.
+# These control how many master and worker nodes get provisioned.
 #--------------------------------------------------------------------------
 #
 # NOTE: kube-master-count defaults to 1

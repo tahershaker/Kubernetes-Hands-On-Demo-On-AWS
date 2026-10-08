@@ -44,9 +44,11 @@ This section walks through what gets built, so you understand the shape of the e
 
 **5. An SSH key pair is generated for you.** Terraform creates a fresh 4096-bit RSA key pair on every `apply`, saves the private key locally, and copies it onto the bastion too — so the bastion can SSH onward into the private nodes.
 
-**6. The virtual machines are created last.** Four Ubuntu EC2 instances are built (by default): the bastion in the public subnet, and the master and worker nodes in the private subnet (one master, two workers by default). Every node gets a fixed, predetermined private IP, rather than one handed out by DHCP.
+**6. The virtual machines are created last.** Four Ubuntu EC2 instances are built (by default): the bastion in the public subnet, and the master and worker nodes in the private subnet (one master, two workers by default). Every node gets a fixed, predetermined private IP, rather than one handed out by DHCP. The bastion also gets a fixed public IP, through an Elastic IP, so it keeps the same address even if the instance is stopped and started again.
 
 **7. The bastion is prepared for the next stage.** Terraform copies a `k8s-scripts/` folder onto the bastion and makes every script executable. Nothing runs yet — these scripts are used in [**02-Prepare**](/02-Prepare/README.md) to install and prepare Kubernetes.
+
+**8. [Optional] An internal load balancer is created, if you're running 3 master nodes.** This is optional, and depends on how many master nodes you deploy. With `kube-master-count` set to `3`, Terraform also creates an internal Network Load Balancer for the Kubernetes API, listening on port 6443, plus a second listener on port 9345 for RKE2 node registration — this avoids some expected issues that come with using the public load balancer created above for this purpose. Every master is registered against both listeners. This internal load balancer sits entirely inside the private subnet, at a fixed address of `.10`. With a single master node, it isn't created at all.
 
 One last thing worth knowing: the Kubernetes nodes have no public IP. The bastion is the only way in, and the NAT Gateway is the only way out to the internet for those nodes.
 
@@ -70,6 +72,7 @@ The table below lists every resource this Terraform creates, so you can see the 
 | `aws_subnet` | `priv-sub-01` | Private subnet — hosts the Kubernetes nodes |
 | `aws_eip` | `nat-gw-eip` | Elastic IP for the NAT Gateway |
 | `aws_eip` | `lb-eip` | Elastic IP for the Network Load Balancer |
+| `aws_eip` | `bastion-eip` | Elastic IP for the bastion host — keeps the same public IP even after the instance is stopped and started again |
 | `aws_nat_gateway` | `main-natgw` | Gives the private subnet outbound internet access |
 | `aws_security_group` | `pub-sg-01` | Firewall rules for the public subnet |
 | `aws_security_group` | `priv-sg-01` | Firewall rules for the private subnet |
@@ -94,6 +97,13 @@ The table below lists every resource this Terraform creates, so you can see the 
 | `aws_lb_target_group_attachment` | `https-tg-att-worker` | Registers every worker node against the HTTPS target group |
 | `aws_lb_listener` | `http-listener-01` | Load balancer listener on port 80 |
 | `aws_lb_listener` | `https-listener-01` | Load balancer listener on port 443 |
+| `aws_lb` | `nlb-api-01` | Internal Network Load Balancer for the Kubernetes API — only created when running 3 master nodes |
+| `aws_lb_target_group` | `api-tg-01` | Target group for the Kubernetes API (port 6443) — only with 3 masters |
+| `aws_lb_target_group` | `rke2-tg-01` | Target group for RKE2 node registration (port 9345) — only with 3 masters |
+| `aws_lb_target_group_attachment` | `api-tg-att-master` | Registers every master node against the API target group — only with 3 masters |
+| `aws_lb_target_group_attachment` | `rke2-tg-att-master` | Registers every master node against the RKE2 registration target group — only with 3 masters |
+| `aws_lb_listener` | `api-listener-01` | Listener on port 6443 — only with 3 masters |
+| `aws_lb_listener` | `rke2-listener-01` | Listener on port 9345 — only with 3 masters |
 | `random_string` | `ssh-key-random` | Random suffix so the SSH key name is unique per deployment |
 | `tls_private_key` | `ssh-key-pair-local-01` | Generates the 4096-bit RSA SSH key pair |
 | `aws_key_pair` | `demo-ssh-key-pair-01` | Registers the generated public key in AWS |
@@ -147,6 +157,8 @@ The table below lists every variable this Terraform accepts, along with its defa
 ## Customization
 
 Before anything else, it's worth knowing what you **cannot** change: the starting IP addresses for the nodes — `bastion-ip-host-num`, `kube-master-ip-start`, and `kube-worker-ip-start`. These are fixed by design, and Terraform will reject any attempt to change them. The reason is that other scripts in this repo depend on a controlled, predictable IP layout to work correctly — if these shifted, those scripts would break. You can still customize the subnet CIDR itself, but whatever subnet you set, node numbering will always start from `.11` and count forward from there.
+
+Address `.10` in the private subnet is also reserved, for the internal Kubernetes API load balancer described above — this only applies if you run 3 master nodes.
 
 Everything else is open to customization. Here's how to do it.
 
@@ -336,6 +348,8 @@ terraform output
 
 ![step-7](/01-Provision/Images/step-7.png)
 
+If you deployed with 3 master nodes, the outputs also include `kube-api-lb-ip` — the internal address of the Kubernetes API load balancer. You'll need this when [**02-Prepare**](/02-Prepare/README.md) asks for the API load balancer IP on the first master.
+
 ---
 
 ## Testing SSH Access to the Bastion
@@ -392,7 +406,9 @@ To start all instances again:
 ./start-stop-scripts/ec2-power-on.sh
 ```
 
-One thing to be clear on: stopping the instances is not the same as destroying the environment. The NAT Gateway, the load balancer, and the attached disks are still billed whilst the instances are stopped. These scripts reduce cost — they don't eliminate it. If you're finished with the environment for good, use `terraform destroy` instead (see Cleanup below).
+> Because the bastion has a fixed public IP through its Elastic IP, you'll be able to reconnect to the same address every time, even after stopping and starting it.
+
+> One thing to be clear on: stopping the instances is not the same as destroying the environment. The NAT Gateway, the load balancer, and the attached disks are still billed whilst the instances are stopped. These scripts reduce cost — they don't eliminate it. If you're finished with the environment for good, use `terraform destroy` instead (see Cleanup below).
 
 ---
 

@@ -10,6 +10,12 @@
 # so any number of masters or workers gets registered automatically -
 # no manual attachment block per node.
 #
+# NOTE: the last section creates an internal Network Load Balancer for the
+# Kubernetes API (port 6443) and for RKE2 node registration (port 9345).
+# It exists only when kube-master-count is 3. With 1 master there is
+# nothing to balance, so no API load balancer is created. Its fixed
+# address is .10 of the private subnet.
+#
 #------------------------------------------------------
 
 # First create Load balancers
@@ -142,6 +148,158 @@ resource "aws_lb_listener" "https-listener-01" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.https-tg-01.arn
+  }
+}
+
+#========================================================================
+
+# Fifth create the Kubernetes API Load Balancer (3-master clusters only)
+#------------------------------------------------------------------------
+# With 3 masters, every node reaches the Kubernetes API through one
+# internal address - this NLB. With 1 master there is no API load
+# balancer, since nodes use the master's private IP directly.
+#
+# The NLB listens on two ports:
+#   - 6443: the Kubernetes API (kubeadm and RKE2)
+#   - 9345: the RKE2 supervisor port, used by nodes joining an RKE2 cluster.
+#           With kubeadm nothing listens on 9345, so its targets show as
+#           unhealthy. That is harmless.
+
+locals {
+  create-api-nlb = var.kube-master-count == 3
+}
+
+# Create the internal API NLB with a fixed private IP (.10 of the private
+# subnet - just below the master range, which starts at .11)
+resource "aws_lb" "nlb-api-01" {
+  count              = local.create-api-nlb ? 1 : 0
+  name               = "demo-nlb-api-01"
+  load_balancer_type = "network"
+  internal           = true
+
+  subnet_mapping {
+    subnet_id            = aws_subnet.priv-sub-01.id
+    private_ipv4_address = cidrhost(var.priv-sub-01-cidr, 10)
+  }
+
+  tags = {
+    Name       = "demo-nlb-api-01"
+    DeployedBy = "TerraForm"
+    UsedFor    = "K8sDemo"
+    User       = "tshaker"
+  }
+}
+
+#========================================================================
+
+# Create the Target Groups
+# Client IP preservation is off on both, so a master can reach the NLB
+# even when the NLB sends the connection back to that same master.
+
+# Create the API Target Group - forwards to the Kubernetes API on the masters
+resource "aws_lb_target_group" "api-tg-01" {
+  count              = local.create-api-nlb ? 1 : 0
+  depends_on         = [aws_lb.nlb-api-01]
+  name               = "demo-api-tg-01"
+  port               = 6443
+  protocol           = "TCP"
+  vpc_id             = aws_vpc.main-vpc.id
+  target_type        = "instance"
+  preserve_client_ip = "false"
+
+  health_check {
+    protocol            = "TCP"
+    interval            = 10
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+  }
+
+  tags = {
+    Name       = "demo-api-tg-01"
+    DeployedBy = "TerraForm"
+    UsedFor    = "K8sDemo"
+    User       = "tshaker"
+  }
+}
+
+# Create the RKE2 Registration Target Group - forwards to the RKE2
+# supervisor port on the masters
+resource "aws_lb_target_group" "rke2-tg-01" {
+  count              = local.create-api-nlb ? 1 : 0
+  depends_on         = [aws_lb.nlb-api-01]
+  name               = "demo-rke2-tg-01"
+  port               = 9345
+  protocol           = "TCP"
+  vpc_id             = aws_vpc.main-vpc.id
+  target_type        = "instance"
+  preserve_client_ip = "false"
+
+  health_check {
+    protocol            = "TCP"
+    interval            = 10
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+  }
+
+  tags = {
+    Name       = "demo-rke2-tg-01"
+    DeployedBy = "TerraForm"
+    UsedFor    = "K8sDemo"
+    User       = "tshaker"
+  }
+}
+
+#========================================================================
+
+# Register every master on both Target Groups
+
+# Register every master on the API Target Group
+resource "aws_lb_target_group_attachment" "api-tg-att-master" {
+  count            = local.create-api-nlb ? var.kube-master-count : 0
+  depends_on       = [aws_lb_target_group.api-tg-01]
+  target_group_arn = aws_lb_target_group.api-tg-01[0].arn
+  target_id        = aws_instance.kube-master[count.index].id
+  port             = 6443
+}
+
+# Register every master on the RKE2 Registration Target Group
+resource "aws_lb_target_group_attachment" "rke2-tg-att-master" {
+  count            = local.create-api-nlb ? var.kube-master-count : 0
+  depends_on       = [aws_lb_target_group.rke2-tg-01]
+  target_group_arn = aws_lb_target_group.rke2-tg-01[0].arn
+  target_id        = aws_instance.kube-master[count.index].id
+  port             = 9345
+}
+
+#========================================================================
+
+# Create the Listeners
+
+# Create the API Listener
+resource "aws_lb_listener" "api-listener-01" {
+  count             = local.create-api-nlb ? 1 : 0
+  depends_on        = [aws_lb.nlb-api-01, aws_lb_target_group.api-tg-01]
+  load_balancer_arn = aws_lb.nlb-api-01[0].arn
+  port              = "6443"
+  protocol          = "TCP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.api-tg-01[0].arn
+  }
+}
+
+# Create the RKE2 Registration Listener
+resource "aws_lb_listener" "rke2-listener-01" {
+  count             = local.create-api-nlb ? 1 : 0
+  depends_on        = [aws_lb.nlb-api-01, aws_lb_target_group.rke2-tg-01]
+  load_balancer_arn = aws_lb.nlb-api-01[0].arn
+  port              = "9345"
+  protocol          = "TCP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.rke2-tg-01[0].arn
   }
 }
 
