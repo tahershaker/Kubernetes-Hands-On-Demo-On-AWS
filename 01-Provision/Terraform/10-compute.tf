@@ -191,4 +191,17 @@ resource "aws_instance" "kube-worker" {
   }
 }
 
+
+# Write instance IDs and region for the power on/off scripts
+resource "local_file" "instance-ids" {
+  filename        = "${path.module}/instance-ids.env"
+  file_permission = "0644"
+  content         = <<-EOT
+    AWS_REGION="${var.aws-region}"
+    BASTION_ID="${aws_instance.bastion-01.id}"
+    MASTER_IDS=(${join(" ", aws_instance.kube-master[*].id)})
+    WORKER_IDS=(${join(" ", aws_instance.kube-worker[*].id)})
+  EOT
+}
+
 #========================================
