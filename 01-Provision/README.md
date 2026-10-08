@@ -251,7 +251,10 @@ Here is everything you'll find inside this folder, and what each part is for:
 ```
 01-Provision/
 ├── Images/
-│   └── aws-arch.png              # Architecture diagram
+│   └── AWS-Kube-Arch-HL.png      # Architecture diagram
+├── start-stop-scripts/
+│   ├── ec2-power-off.sh          # Script used to power-off all provisioned instance - when required
+│   └── ec2-power-on.sh           # Script used to power-on all provisioned instance - when required
 ├── Terraform/
 │   ├── k8s-scripts/              # Scripts copied onto the bastion during provisioning.
 │   │                             # Not used here — they're picked up in 02-Prepare to
