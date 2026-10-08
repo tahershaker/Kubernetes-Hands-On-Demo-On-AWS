@@ -374,6 +374,7 @@ When you provision the environment, Terraform also writes an `instance-ids.env` 
 - **`ec2-power-on.sh`** — starts them all again. Run this when you come back to continue.
 
 Before using them for the first time, make sure both are executable:
+
 ```bash
 chmod +x start-stop-scripts/ec2-power-off.sh
 chmod +x start-stop-scripts/ec2-power-on.sh
